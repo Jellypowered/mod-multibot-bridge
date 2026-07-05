@@ -4,3 +4,10 @@
 # 1 = enabled
 # 0 = disabled
 MultiBotBridge.EnableConsoleLogs = 0
+
+# Comma-separated addon message prefixes accepted by the bridge.
+# Replies are sent back on the same prefix the request arrived on.
+#
+# Default keeps MultiBot-Chatless (MBOT) and PBAltManager (PBAM)
+# isolated while using the same server bridge.
+MultiBotBridge.AcceptPrefixes = MBOT,PBAM

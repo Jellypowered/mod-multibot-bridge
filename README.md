@@ -1,8 +1,8 @@
 <div align="center">
+<strong>This is the EXTENDED version. Use this with the Extended version of PBAltManager</strong>
 
 # mod-multibot-bridge
-
-### AzerothCore server-side bridge module for MultiBot Chatless
+# AzerothCore server-side bridge module for MultiBot Chatless
 
 <strong>mod-multibot-bridge</strong> is the companion AzerothCore module used by the
 <a href="https://github.com/Wishmaster117/MultiBot-Chatless">MultiBot-Chatless</a>
@@ -84,9 +84,9 @@ Without this module, the addon cannot use the new bridge-first / mostly chatless
 
 # What is mod-multibot-bridge?
 
-`mod-multibot-bridge` is a server-side module that exposes structured Playerbot data to the MultiBot addon using addon messages.
+`mod-multibot-bridge` is a server-side module that exposes structured Playerbot data to client addons using addon messages.
 
-Instead of forcing the addon to trigger bot commands and parse localized chat replies, the addon can send structured `MBOT GET~...` requests to the server.
+Instead of forcing the addon to trigger bot commands and parse localized chat replies, the addon can send structured bridge requests such as `MBOT GET~...` or `PBAM GET~...` to the server.
 
 The bridge then answers with structured payloads that the addon can consume directly.
 
@@ -211,6 +211,13 @@ azerothcore/env/dist/etc/modules/MultiBotBridge.conf.dist
 
 Follow the same config handling pattern you use for your other AzerothCore modules.
 
+Default config values:
+
+```ini
+MultiBotBridge.EnableConsoleLogs = 0
+MultiBotBridge.AcceptPrefixes = MBOT,PBAM
+```
+
 ---
 
 ## 5. Start the server
@@ -222,8 +229,8 @@ When the module is loaded correctly and the addon connects, the server console s
 ```text
 MBOT HELLO
 MBOT HELLO_ACK
-MBOT PING
-MBOT PONG
+PBAM HELLO
+PBAM HELLO_ACK
 GET~ROSTER
 GET~STATES
 GET~DETAILS
@@ -297,7 +304,10 @@ git pull
 
 # Protocol Overview
 
-The bridge uses the `MBOT` addon-message prefix.
+The bridge accepts configurable addon-message prefixes via `MultiBotBridge.AcceptPrefixes`.
+By default it accepts `MBOT,PBAM`.
+
+Responses are sent back on the same prefix the request arrived on, so addons using different prefixes stay isolated from each other.
 
 Common request / response flow:
 
@@ -305,17 +315,17 @@ Common request / response flow:
 Addon  -> Server: MBOT HELLO~<protocolVersion>
 Server -> Addon:  MBOT HELLO_ACK~<protocolVersion>~mod-multibot-bridge
 
-Addon  -> Server: MBOT PING~<token>
-Server -> Addon:  MBOT PONG~<token>
+Addon  -> Server: PBAM HELLO~<protocolVersion>
+Server -> Addon:  PBAM HELLO_ACK~<protocolVersion>~mod-multibot-bridge
 
 Addon  -> Server: MBOT GET~ROSTER
 Server -> Addon:  MBOT ROSTER~...
 
-Addon  -> Server: MBOT GET~STATES
-Server -> Addon:  MBOT STATES~...
+Addon  -> Server: PBAM GET~STATES
+Server -> Addon:  PBAM STATES~...
 ```
 
-The exact payloads are consumed internally by the MultiBot addon.
+The exact payloads are consumed internally by the client addons.
 
 ---
 
@@ -379,6 +389,14 @@ The exact payloads are consumed internally by the MultiBot addon.
     <td>Refresh character info skills, professions, secondary skills, weapon skills and armor skills.</td>
   </tr>
   <tr>
+    <td><code>GET~INVENTORY_BULK</code></td>
+    <td>Refresh inventory data for multiple bots in a single request (bag entries and item locations).</td>
+  </tr>
+  <tr>
+    <td><code>GET~BOT_SKILLS_BULK</code></td>
+    <td>Refresh skills data for multiple bots in a single request.</td>
+  </tr>
+  <tr>
     <td><code>GET~BOT_REPUTATIONS</code></td>
     <td>Refresh visible bot reputation standings for the Character Info frame.</td>
   </tr>
@@ -415,6 +433,34 @@ The exact payloads are consumed internally by the MultiBot addon.
     <td>Ask a bot to craft one known profession recipe and return detailed cast failure reasons.</td>
   </tr>
   <tr>
+    <td><code>RUN~QUEST_ABANDON</code></td>
+    <td>Abandon a quest from the bot's log.</td>
+  </tr>
+  <tr>
+    <td><code>RUN~QUEST_SHARE</code></td>
+    <td>Share a quest to the bot's group (empty target = group-wide share).</td>
+  </tr>
+  <tr>
+    <td><code>RUN~ITEM_EQUIP</code></td>
+    <td>Equip an item with slot hint (<code>AUTO</code>, <code>BAG</code>, <code>MAIN_HAND</code>, <code>OFF_HAND</code>, <code>RANGED</code>).</td>
+  </tr>
+  <tr>
+    <td><code>RUN~ITEM_TRADE</code></td>
+    <td>Trade an item to another player/bot with optional count.</td>
+  </tr>
+  <tr>
+    <td><code>RUN~CAST_SPELL</code></td>
+    <td>Cast a spell with optional target and detailed failure reasons mapped from <code>SpellCastResult</code>.</td>
+  </tr>
+  <tr>
+    <td><code>RUN~TALENT_APPLY</code></td>
+    <td>Apply a talent build (including reset via <code>0-0-0</code>).</td>
+  </tr>
+  <tr>
+    <td><code>RUN~CRAFT_RECIPE_TARGET</code></td>
+    <td>Craft a profession recipe targeting a specific item (bag, equipped, or trade slot).</td>
+  </tr>
+  <tr>
     <td><code>RUN~ITEM_ACTION</code></td>
     <td>Run whitelisted inventory item actions such as bank deposit, bank withdraw, guild bank deposit, guild bank withdraw and vendor buy.</td>
   </tr>
@@ -425,6 +471,18 @@ The exact payloads are consumed internally by the MultiBot addon.
   <tr>
     <td><code>RUN~TRAINER_LEARN</code></td>
     <td>Ask a bot to learn one trainer spell or all available trainer spells after revalidating the selected trainer.</td>
+  </tr>
+  <tr>
+    <td><code>INV_BAG</code></td>
+    <td>Send bag entries with type, slots, and item ID for inventory view.</td>
+  </tr>
+  <tr>
+    <td><code>INV_ITEM_LOC</code></td>
+    <td>Send exact bag/slot locations for each inventory item.</td>
+  </tr>
+  <tr>
+    <td><code>INV_EQUIP_LOC</code></td>
+    <td>Send equipped items with slot index and count.</td>
   </tr>
   <tr>
     <td><code>RUN~RTI</code></td>
@@ -505,7 +563,7 @@ Check that:
 - `worldserver` was restarted after rebuilding.
 - `MultiBot-Chatless` is installed in `Interface/AddOns/MultiBot`.
 - The addon is enabled on the character selection screen.
-- The server console shows `MBOT HELLO` / `HELLO_ACK` traffic when logging in or reloading the UI.
+- The server console shows `MBOT HELLO` / `HELLO_ACK` traffic for MultiBot-Chatless, or `PBAM HELLO` / `HELLO_ACK` for PBAltManager, when logging in or reloading the UI.
 
 </details>
 
