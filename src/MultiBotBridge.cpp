@@ -134,6 +134,7 @@ void RunInventoryItemActionCommand(Player* requester, ChatMsg replyType, std::st
 void RunQuestAbandonCommand(Player* requester, ChatMsg replyType, std::string const& botName, std::string const& requestToken, std::string const& questIdValue);
 void RunQuestShareCommand(Player* requester, ChatMsg replyType, std::string const& botName, std::string const& requestToken, std::string const& questIdValue, std::string const& encodedTargetName);
 void RunItemEquipCommand(Player* requester, ChatMsg replyType, std::string const& botName, std::string const& requestToken, std::string const& itemIdValue, std::string const& slotHintValue, std::string const& bagValue, std::string const& slotValue);
+void RunItemUseCommand(Player* requester, ChatMsg replyType, std::string const& botName, std::string const& requestToken, std::string const& itemIdValue, std::string const& bagValue, std::string const& slotValue);
 void RunBagMoveCommand(Player* requester, ChatMsg replyType, std::string const& botName, std::string const& requestToken, std::string const& sourceBagIndexValue, std::string const& targetBagIndexValue);
 void RunItemTradeCommand(Player* requester, ChatMsg replyType, std::string const& botName, std::string const& requestToken, std::string const& itemIdValue, std::string const& encodedTargetName, std::string const& countValue, std::string const& bagValue, std::string const& slotValue);
 void RunSpellCastCommand(Player* requester, ChatMsg replyType, std::string const& botName, std::string const& requestToken, std::string const& spellIdValue, std::string const& encodedTargetName);
@@ -4677,6 +4678,113 @@ void RunItemEquipCommand(Player* requester, ChatMsg replyType, std::string const
     SendRunResult(requester, replyType, "ITEM_EQUIP", effectiveBotName, token, ok, ok ? "OK" : reason);
 }
 
+void RunItemUseCommand(Player* requester, ChatMsg replyType, std::string const& botName, std::string const& requestToken, std::string const& itemIdValue, std::string const& bagValue, std::string const& slotValue)
+{
+    std::string const trimmedBotName = Trim(botName);
+    std::string const token = Trim(requestToken);
+    uint32 itemId = 0;
+    uint8 bag = 0;
+    uint8 slot = 0;
+    bool const hasPosition = ParseUint8Field(bagValue, bag) && ParseUint8Field(slotValue, slot);
+
+    Player* const bot = FindBotByName(requester, trimmedBotName);
+    std::string const effectiveBotName = bot ? bot->GetName() : trimmedBotName;
+
+    if (!bot)
+    {
+        SendRunResult(requester, replyType, "ITEM_USE", effectiveBotName, token, false, "NO_BOT");
+        return;
+    }
+
+    PlayerbotAI* const botAI = GetBotAI(bot);
+    if (!botAI)
+    {
+        SendRunResult(requester, replyType, "ITEM_USE", effectiveBotName, token, false, "NO_AI");
+        return;
+    }
+
+    if (!ParseUint32Field(itemIdValue, itemId) || !itemId || !hasPosition)
+    {
+        SendRunResult(requester, replyType, "ITEM_USE", effectiveBotName, token, false, "BAD_REQUEST");
+        return;
+    }
+
+    Item* const item = FindItemByOptionalPosition(bot, itemId, bag, slot, true);
+    if (!item)
+    {
+        SendRunResult(requester, replyType, "ITEM_USE", effectiveBotName, token, false, "MISSING_ITEM");
+        return;
+    }
+
+    InventoryResult const canUse = bot->CanUseItem(item);
+    if (canUse != EQUIP_ERR_OK)
+    {
+        SendRunResult(requester, replyType, "ITEM_USE", effectiveBotName, token, false, MapEquipError(canUse));
+        return;
+    }
+
+    if (bot->IsNonMeleeSpellCast(false))
+    {
+        SendRunResult(requester, replyType, "ITEM_USE", effectiveBotName, token, false, "CAST_BUSY");
+        return;
+    }
+
+    ItemTemplate const* const proto = item->GetTemplate();
+    if (!proto)
+    {
+        SendRunResult(requester, replyType, "ITEM_USE", effectiveBotName, token, false, "MISSING_ITEM");
+        return;
+    }
+
+    uint32 spellId = 0;
+    for (uint8 i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)
+    {
+        if (proto->Spells[i].SpellId > 0)
+        {
+            spellId = proto->Spells[i].SpellId;
+            if (!botAI->CanCastSpell(spellId, bot, false, nullptr, item))
+            {
+                SendRunResult(requester, replyType, "ITEM_USE", effectiveBotName, token, false, "CAST_FAILED");
+                return;
+            }
+            break;
+        }
+    }
+
+    if (!spellId && !proto->StartQuest)
+    {
+        SendRunResult(requester, replyType, "ITEM_USE", effectiveBotName, token, false, "NOT_USABLE");
+        return;
+    }
+
+    if (proto->StartQuest && sObjectMgr->GetQuestTemplate(proto->StartQuest))
+    {
+        WorldPacket packet(CMSG_QUESTGIVER_ACCEPT_QUEST, 8 + 4 + 4);
+        packet << item->GetGUID();
+        packet << proto->StartQuest;
+        packet << uint32(0);
+        bot->GetSession()->HandleQuestgiverAcceptQuestOpcode(packet);
+        SendRunResult(requester, replyType, "ITEM_USE", effectiveBotName, token, true, "OK");
+        return;
+    }
+
+    bot->ClearUnitState(UNIT_STATE_CHASE);
+    bot->ClearUnitState(UNIT_STATE_FOLLOW);
+    if (bot->isMoving())
+    {
+        bot->StopMoving();
+        SendRunResult(requester, replyType, "ITEM_USE", effectiveBotName, token, false, "MOVING");
+        return;
+    }
+
+    WorldPacket packet(CMSG_USE_ITEM);
+    packet << item->GetBagSlot() << item->GetSlot() << uint8(1) << spellId << item->GetGUID() << uint32(0) << uint8(0);
+    packet << uint32(TARGET_FLAG_NONE);
+    packet << bot->GetPackGUID();
+    bot->GetSession()->HandleUseItemOpcode(packet);
+    SendRunResult(requester, replyType, "ITEM_USE", effectiveBotName, token, true, "OK");
+}
+
 void RunBagMoveCommand(Player* requester, ChatMsg replyType, std::string const& botName, std::string const& requestToken, std::string const& sourceBagIndexValue, std::string const& targetBagIndexValue)
 {
     std::string const trimmedBotName = Trim(botName);
@@ -6123,6 +6231,16 @@ bool HandleBridgeOpcode(Player* player, ChatMsg replyType, std::string const& op
             std::pair<std::string, std::string> const slotHintRequest = SplitOnce(itemRequest.second, kFieldSeparator);
             std::pair<std::string, std::string> const bagRequest = SplitOnce(slotHintRequest.second, kFieldSeparator);
             RunItemEquipCommand(player, replyType, botRequest.first, tokenRequest.first, itemRequest.first, slotHintRequest.first, bagRequest.first, bagRequest.second);
+            return true;
+        }
+
+        if (requestType == "ITEM_USE")
+        {
+            std::pair<std::string, std::string> const botRequest = SplitOnce(request.second, kFieldSeparator);
+            std::pair<std::string, std::string> const tokenRequest = SplitOnce(botRequest.second, kFieldSeparator);
+            std::pair<std::string, std::string> const itemRequest = SplitOnce(tokenRequest.second, kFieldSeparator);
+            std::pair<std::string, std::string> const bagRequest = SplitOnce(itemRequest.second, kFieldSeparator);
+            RunItemUseCommand(player, replyType, botRequest.first, tokenRequest.first, itemRequest.first, bagRequest.first, bagRequest.second);
             return true;
         }
 

@@ -445,6 +445,10 @@ The exact payloads are consumed internally by the client addons.
     <td>Equip an item with slot hint (<code>AUTO</code>, <code>BAG</code>, <code>MAIN_HAND</code>, <code>OFF_HAND</code>, <code>RANGED</code>).</td>
   </tr>
   <tr>
+    <td><code>RUN~ITEM_USE</code></td>
+    <td>Use a specific bag/slot item through native item-use handling for self/no-target item uses.</td>
+  </tr>
+  <tr>
     <td><code>RUN~ITEM_TRADE</code></td>
     <td>Trade an item to another player/bot with optional count.</td>
   </tr>
