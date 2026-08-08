@@ -327,6 +327,25 @@ Server -> Addon:  PBAM STATES~...
 
 The exact payloads are consumed internally by the client addons.
 
+The server also advertises these capabilities after `HELLO_ACK`:
+
+```text
+CAPS~STATE_FRAMING_V1,STRATEGY_MUTATION_V1
+```
+
+State requests may use tokenized `STATE`/`STATES` transactions. Strategy mutations
+use `RUN~STRATEGY` and return `STRATEGY_ACK`. Formation operations use
+`RUN~FORMATION`, `GET~FORMATIONS`, and the `FORMATION_ACK`/
+`FORMATIONS_BEGIN`/`FORMATIONS_ITEM`/`FORMATIONS_END` responses.
+
+## Protocol validation
+
+Recognized packets require the exact `<prefix>\\t<opcode>` envelope and are limited
+to 255 bytes. The bridge rejects malformed field counts, invalid request tokens,
+control characters, malformed `%XX` encoding, numeric overflow, and oversized
+commands with structured `ERR` responses. Responses preserve the request prefix,
+including `PBAM`.
+
 ---
 
 # Supported Bridge Areas
@@ -351,6 +370,14 @@ The exact payloads are consumed internally by the client addons.
   <tr>
     <td><code>GET~STATES</code></td>
     <td>Refresh bot state flags and UI state data.</td>
+  </tr>
+  <tr>
+    <td><code>GET~FORMATIONS</code></td>
+    <td>Read effective formations for controllable bots in the current group or raid.</td>
+  </tr>
+  <tr>
+    <td><code>GET~WEAPON_ENCHANT</code></td>
+    <td>Read on-demand main-hand/off-hand temporary enchant diagnostics for a controllable bot.</td>
   </tr>
   <tr>
     <td><code>GET~DETAILS</code></td>
@@ -431,6 +458,14 @@ The exact payloads are consumed internally by the client addons.
   <tr>
     <td><code>RUN~CRAFT_RECIPE</code></td>
     <td>Ask a bot to craft one known profession recipe and return detailed cast failure reasons.</td>
+  </tr>
+  <tr>
+    <td><code>RUN~FORMATION</code></td>
+    <td>Apply one validated formation to controllable bots in the current group or raid.</td>
+  </tr>
+  <tr>
+    <td><code>RUN~STRATEGY</code></td>
+    <td>Apply bounded, verified combat/non-combat strategy mutations.</td>
   </tr>
   <tr>
     <td><code>RUN~QUEST_ABANDON</code></td>
